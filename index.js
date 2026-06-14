@@ -1,9 +1,11 @@
+const http = require('http');
+http.createServer((req, res) => { res.writeHead(200); res.end('Bot is running'); }).listen(process.env.PORT || 10000);
+
 const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const { initializeApp } = require('firebase/app');
-const { getDatabase, ref, once, child, set, get } = require('firebase/database');
+const { getDatabase, ref, get, set } = require('firebase/database');
 
-// Configuration Firebase identique à ton site web
 const firebaseConfig = {
     projectId: "vip-pronos",
     databaseURL: "https://vip-pronos-default-rtdb.firebaseio.com/"
@@ -34,7 +36,7 @@ async function startBot() {
     });
 
     sock.ev.on('messages.upsert', async m => {
-        const msg = m.messages[0];
+        const msg = m.messages;
         if (!msg.message || msg.key.fromMe) return;
 
         const remoteJid = msg.key.remoteJid;
