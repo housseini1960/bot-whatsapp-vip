@@ -6,7 +6,7 @@ const { getDatabase, ref, once, child, set, get } = require('firebase/database')
 // Configuration Firebase identique à ton site web
 const firebaseConfig = {
     projectId: "vip-pronos",
-    databaseURL: "https://firebaseio.com"
+    databaseURL: "https://vip-pronos-default-rtdb.firebaseio.com/"
 };
 
 const app = initializeApp(firebaseConfig);
