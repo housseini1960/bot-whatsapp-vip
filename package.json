@@ -1,0 +1,14 @@
+{
+  "name": "bot-whatsapp-vip",
+  "version": "1.0.0",
+  "description": "Bot WhatsApp de distribution de codes VIP avec Firebase",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "whatsapp-web.js": "^1.26.0",
+    "qrcode-terminal": "^0.12.0",
+    "firebase-admin": "^12.0.0"
+  }
+}
