@@ -1,82 +1,70 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const admin = require('firebase-admin');
 
-// 1. Connexion automatique à ta base Firebase VIP Pronos
 const firebaseConfig = {
     projectId: "vip-pronos",
-    databaseURL: "https://vip-pronos-default-rtdb.firebaseio.com"
+    databaseURL: "https://firebaseio.com"
 };
 
-if (admin.apps.length === 0) {
-    admin.initializeApp(firebaseConfig);
-}
+if (admin.apps.length === 0) admin.initializeApp(firebaseConfig);
 const db = admin.database();
 
-// 2. Initialisation du client WhatsApp
-const client = new Client({
-    authStrategy: new LocalAuth(),
-    puppeteer: {
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-    }
-});
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+    
+    const sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: false
+    });
 
-// Affichage du QR Code dans le terminal pour l'activation
-client.on('qr', (qr) => {
-    qrcode.generate(qr, { small: true });
-    console.log("👉 Scanne ce QR Code avec ton WhatsApp pour activer le Bot !");
-});
+    sock.ev.on('creds.update', saveCreds);
 
-client.on('ready', () => {
-    console.log('🚀 Le Bot WhatsApp VIP est connecté et prêt à travailler !');
-});
+    sock.ev.on('connection.update', (update) => {
+        const { connection, qr } = update;
+        if (qr) {
+            qrcode.generate(qr, { small: true });
+            console.log("👉 Scanne ce QR Code avec ton WhatsApp pour activer le Bot !");
+        }
+        if (connection === 'open') {
+            console.log('🚀 Le Bot WhatsApp VIP est connecté et prêt à travailler !');
+        }
+    });
 
-// 3. Logique de réponse automatique aux messages des clients
-client.on('message', async (msg) => {
-    const chat = await msg.getChat();
-    const userMessage = msg.body.trim().toLowerCase();
+    sock.ev.on('messages.upsert', async m => {
+        const msg = m.messages[0];
+        if (!msg.message || msg.key.fromMe) return;
 
-    // Détection du premier message provenant de ton site de pronostics
-    if (userMessage.includes("voici ma preuve dmmd7") || userMessage === "vip" || userMessage === "bonjour") {
-        await chat.sendMessage("👋 *Bienvenue chez VIP PRONOS !*\n\nPour recevoir ton code d'accès unique, envoie-moi ton *ID Bookmaker* (uniquement les chiffres) pour vérification.");
-        return;
-    }
+        const remoteJid = msg.key.remoteJid;
+        const userMessage = (msg.message.conversation || msg.message.extendedTextMessage?.text || "").trim().toLowerCase();
 
-    // Si le client envoie des chiffres (son ID), on lui distribue son code VIP
-    if (/^\d+$/.test(userMessage)) {
-        await chat.sendMessage("🔍 *Vérification de ton inscription en cours...*");
+        if (userMessage.includes("voici ma preuve dmmd7") || userMessage === "vip" || userMessage === "bonjour") {
+            await sock.sendMessage(remoteJid, { text: "👋 *Bienvenue chez VIP PRONOS !*\n\nPour recevoir ton code d'accès unique, envoie-moi ton *ID Bookmaker* (uniquement les chiffres) pour vérification." });
+            return;
+        }
 
-        // Connexion à Firebase pour chercher un code VIP promo disponible ('false')
-        const promoRef = db.ref('codes_promos');
-        
-        promoRef.once('value', async (snapshot) => {
-            if (!snapshot.exists()) {
-                await chat.sendMessage("❌ Aucun code VIP n'est configuré pour le moment.");
-                return;
-            }
+        if (/^\d+$/.test(userMessage)) {
+            await sock.sendMessage(remoteJid, { text: "🔍 *Vérification de ton inscription en cours...*" });
 
-            let codeAttribue = null;
+            const promoRef = db.ref('codes_promos');
+            promoRef.once('value', async (snapshot) => {
+                if (!snapshot.exists()) return;
+                let codeAttribue = null;
+                snapshot.forEach((childSnapshot) => {
+                    if (childSnapshot.val() === false && !codeAttribue) {
+                        codeAttribue = childSnapshot.key;
+                    }
+                });
 
-            // On cherche le premier code de ta base qui est à 'false' (non utilisé)
-            snapshot.forEach((childSnapshot) => {
-                if (childSnapshot.val() === false && !codeAttribue) {
-                    codeAttribue = childSnapshot.key;
+                if (codeAttribue) {
+                    await promoRef.child(codeAttribue).set(true);
+                    await sock.sendMessage(remoteJid, { text: `✅ *Inscription vérifiée avec succès !*\n\nVoici ton code d'accès VIP unique et personnel :\n🔑 *${codeAttribue}*\n\n👉 Entre-le vite sur notre site pour débloquer tes tickets VIP.` });
+                } else {
+                    await sock.sendMessage(remoteJid, { text: "⚠️ *Désolé, tous nos codes VIP ont été distribués.*" });
                 }
             });
+        }
+    });
+}
 
-            if (codeAttribue) {
-                // On donne le code au client et on le marque instantanément à true pour le griller
-                await promoRef.child(codeAttribue).set(true);
-                
-                await chat.sendMessage(`✅ *Inscription vérifiée avec succès !*\n\nVoici ton code d'accès VIP unique et personnel :\n🔑 *${codeAttribue}*\n\n👉 Entre-le vite sur notre site pour débloquer tes tickets VIP. (Attention, il ne marche que sur un seul téléphone !)`);
-            } else {
-                await chat.sendMessage("⚠️ *Désolé, tous nos codes VIP pour cette session ont déjà été distribués.* Contacte l'administrateur.");
-            }
-        }).catch(async (error) => {
-            await chat.sendMessage("❌ Une erreur technique est survenue. Réessaie plus tard.");
-        });
-    }
-});
-
-client.initialize();
-
+startBot();
