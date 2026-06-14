@@ -1,14 +1,16 @@
 const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
-const admin = require('firebase-admin');
+const { initializeApp } = require('firebase/app');
+const { getDatabase, ref, once, child, set, get } = require('firebase/database');
 
+// Configuration Firebase identique à ton site web
 const firebaseConfig = {
     projectId: "vip-pronos",
     databaseURL: "https://firebaseio.com"
 };
 
-if (admin.apps.length === 0) admin.initializeApp(firebaseConfig);
-const db = admin.database();
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
@@ -46,8 +48,8 @@ async function startBot() {
         if (/^\d+$/.test(userMessage)) {
             await sock.sendMessage(remoteJid, { text: "🔍 *Vérification de ton inscription en cours...*" });
 
-            const promoRef = db.ref('codes_promos');
-            promoRef.once('value', async (snapshot) => {
+            const promoRef = ref(db, 'codes_promos');
+            get(promoRef).then(async (snapshot) => {
                 if (!snapshot.exists()) return;
                 let codeAttribue = null;
                 snapshot.forEach((childSnapshot) => {
@@ -57,7 +59,7 @@ async function startBot() {
                 });
 
                 if (codeAttribue) {
-                    await promoRef.child(codeAttribue).set(true);
+                    await set(ref(db, 'codes_promos/' + codeAttribue), true);
                     await sock.sendMessage(remoteJid, { text: `✅ *Inscription vérifiée avec succès !*\n\nVoici ton code d'accès VIP unique et personnel :\n🔑 *${codeAttribue}*\n\n👉 Entre-le vite sur notre site pour débloquer tes tickets VIP.` });
                 } else {
                     await sock.sendMessage(remoteJid, { text: "⚠️ *Désolé, tous nos codes VIP ont été distribués.*" });
