@@ -4,11 +4,10 @@
   "description": "Bot WhatsApp de distribution de codes VIP avec Firebase",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "postinstall": "npx puppeteer browsers install chrome"
+    "start": "node index.js"
   },
   "dependencies": {
-    "whatsapp-web.js": "^1.26.0",
+    "@whiskeysockets/baileys": "^6.5.0",
     "qrcode-terminal": "^0.12.0",
     "firebase-admin": "^12.0.0"
   }
