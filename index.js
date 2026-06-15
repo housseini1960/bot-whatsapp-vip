@@ -1,30 +1,32 @@
 const http = require('http');
 http.createServer((req, res) => { res.writeHead(200); res.end('Bot is running'); }).listen(process.env.PORT || 10000);
 
-const { default: makeWASocket, useSnapshotAuthState } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const { initializeApp } = require('firebase/app');
 const { getDatabase, ref, get, set } = require('firebase/database');
 
 const firebaseConfig = {
     projectId: "vip-pronos",
-    databaseURL: "https://vip-pronos-default-rtdb.firebaseio.com/"
+    databaseURL: "https://firebaseio.com"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 async function startBot() {
-    const state = useSnapshotAuthState();
+    // Utilisation de useMultiFileAuthState pour stabiliser Baileys
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
     
     const sock = makeWASocket({
         auth: state,
         printQRInTerminal: false
     });
 
-    // Code magique pour demander une connexion par numéro de téléphone à la place du QR Code
+    sock.ev.on('creds.update', saveCreds);
+
+    // Demande du code après 10 secondes
     setTimeout(async () => {
         try {
-            // METS TON NUMÉRO DU BOT ICI (avec l'indicatif pays, ex: 227XXXXXXXX pour le Niger)
             const monNumero = "22774126709"; 
             let code = await sock.requestPairingCode(monNumero);
             console.log(`🔑 TON CODE D'ACTIVATION WHATSAPP EST : ${code}`);
@@ -75,5 +77,5 @@ async function startBot() {
         } catch (e) { console.log(e); }
     });
 }
-process.on('uncaughtException', (err) => {});
+process.on('uncaughtException', (err) => { console.log("Erreur capturée : ", err.message); });
 startBot();
